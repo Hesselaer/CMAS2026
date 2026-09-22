@@ -33,7 +33,7 @@ denotation env e = case e of
   ENum   k     -> Just k
   EVar   ident -> Just $ getVal env ident
   ETimes e1 e2 -> liftM2 (*) (denotation env e1) (denotation env e2)
-  EDiv   e1 e2 -> failure e --TODO
+  EDiv   e1 e2 -> if (denotation env e2) == 0 then Nothing else liftM2 (/) (denotation env e1) (denotation env e2)
   EPlus  e1 e2 -> liftM2 (+) (denotation env e1) (denotation env e2)
 
 -- | Implements the big-step operational semantics. Note that bigStep can be a function because
