@@ -33,7 +33,11 @@ denotation env e = case e of
   ENum   k     -> Just k
   EVar   ident -> Just $ getVal env ident
   ETimes e1 e2 -> liftM2 (*) (denotation env e1) (denotation env e2)
-  EDiv   e1 e2 -> if (denotation env e2) == Just 0 then Nothing else liftM2 (/) (denotation env e1) (denotation env e2)
+  EDiv   e1 e2 ->
+    case denotation env e2 of
+      Nothing      -> Nothing
+      Just 0       -> Nothing
+      Just divisor -> (/ divisor) <$> denotation env e1
   EPlus  e1 e2 -> liftM2 (+) (denotation env e1) (denotation env e2)
 
 -- | Implements the big-step operational semantics. Note that bigStep can be a function because
@@ -43,7 +47,10 @@ bigStep env e = case e of
   ENum   k     -> singleton k
   EVar   ident -> singleton $ getVal env ident
   ETimes e1 e2 -> unionWith (*) (bigStep env e1) (bigStep env e2)
-  EDiv   e1 e2 ->  unionWith (/) (bigStep env e1) (Set.filter (/=0) (bigStep env e2))
+  EDiv   e1 e2 ->
+    unionWith (/)
+      (bigStep env e1)
+      (Set.filter (/= 0) (bigStep env e2))
   EPlus  e1 e2 ->  unionWith (+) (bigStep env e1) (bigStep env e2)
 
 -- | Implements the small-step semantics. Note that this only gives one computation step.
@@ -56,7 +63,10 @@ smallStep (env, e) = case e of
   ENum   _     -> empty
   EVar   ident -> singleton (env, ENum $ getVal env ident)
   ETimes e1 e2 -> binaryS e1 e2 (\x -> Just . (*) x) ETimes
-  EDiv   e1 e2 -> binaryS e1 e2 (\x -> \y -> if y == 0 then Nothing else Just (x / y)) EDiv
+  EDiv   e1 e2 ->
+    binaryS e1 e2
+      (\x y -> if y == 0 then Nothing else Just (x / y))
+      EDiv
   EPlus  e1 e2 -> binaryS e1 e2 (\x -> Just . (+) x) EPlus
 
   where
