@@ -1,6 +1,7 @@
 import Test.HUnit
-import Control.Monad
+import Control.Monad (unless)
 import Data.Set as Set
+import System.Exit (exitFailure)
 
 import Syntax.Abs
 import Semantics
@@ -44,10 +45,47 @@ tests =
               ])
   , ArithTestCase "Div zero" (EDiv (ENum 5) (ENum 0)) emptyEnv
     Nothing  Set.empty  Set.empty
+  , ArithTestCase "Div" (EDiv (ENum 9) (ENum 3)) emptyEnv
+    (Just 3) (singleton 3) (singleton (emptyEnv, ENum 3))
+  , ArithTestCase "Div numerator steps"
+    (EDiv (EPlus (ENum 3) (ENum 5)) (ENum 2)) emptyEnv
+    (Just 4) (singleton 4)
+    (singleton (emptyEnv, EDiv (ENum 8) (ENum 2)))
+  , ArithTestCase "Div denominator steps"
+    (EDiv (ENum 8) (EPlus (ENum 1) (ENum 1))) emptyEnv
+    (Just 4) (singleton 4)
+    (singleton (emptyEnv, EDiv (ENum 8) (ENum 2)))
+  , ArithTestCase "Div denominator reduces to zero"
+    (EDiv (ENum 8) (EPlus (ENum 2) (ENum (-2)))) emptyEnv
+    Nothing Set.empty
+    (singleton (emptyEnv, EDiv (ENum 8) (ENum 0)))
+  , ArithTestCase "Nested division by zero"
+    (EPlus (ENum 1) (EDiv (ENum 5) (ENum 0))) emptyEnv
+    Nothing Set.empty Set.empty
+  , ArithTestCase "Variable denominator is zero"
+    (EDiv (EVar (Ident "x")) (EVar (Ident "y"))) e2
+    Nothing Set.empty
+    (fromList
+      [ (e2, EDiv (ENum 4) (EVar (Ident "y")))
+      , (e2, EDiv (EVar (Ident "x")) (ENum 0))
+      ])
+  , ArithTestCase "Fractional and negative operands"
+    (EPlus (EDiv (ENum 1.5) (ENum 0.5))
+           (ETimes (ENum (-2)) (ENum 1.5))) emptyEnv
+    (Just 0) (singleton 0)
+    (fromList
+      [ (emptyEnv,
+          EPlus (ENum 3) (ETimes (ENum (-2)) (ENum 1.5)))
+      , (emptyEnv,
+          EPlus (EDiv (ENum 1.5) (ENum 0.5)) (ENum (-3)))
+      ])
   ]
   where
     e1 :: Env
     e1 = Env [Assign (Ident "x") 4, Assign (Ident "y") 1]
+
+    e2 :: Env
+    e2 = Env [Assign (Ident "x") 4, Assign (Ident "y") 0]
 
     o1, o2, o3, o4, o5 :: Set Double
     o1 = singleton 5
@@ -57,4 +95,6 @@ tests =
     o5 = singleton 21
 
 main :: IO ()
-main = void $ runTestTT $ test tests
+main = do
+  counts <- runTestTT $ test tests
+  unless (errors counts == 0 && failures counts == 0) exitFailure
