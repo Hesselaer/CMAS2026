@@ -3,7 +3,6 @@
 module Semantics.Denotational where
 
 import Syntax.Abs
-import Syntax.ErrM
 import Semantics.Memory
 import Semantics.ExpEval
 import Semantics.Delay
@@ -18,7 +17,11 @@ type D a = Mem -> Delay a
 evalCom :: Com -> D Mem
 evalCom c = case c of
   CSkip            -> pure -- η from lecture
-  CAssign x  e     -> failure c
-  CSeq    c1 c2    -> failure c
-  CIte    b  c1 c2 -> failure c
-  CWhile  b  c1    -> failure c
+  CAssign x  e     -> \m -> pure (updateMem x (evalAExp e m) m)
+  CSeq    c1 c2    -> \m -> evalCom c1 m >>= evalCom c2
+  CIte    b  c1 c2 -> \m ->
+    if evalBExp b m then evalCom c1 m else evalCom c2 m
+  CWhile  b  c1    -> \m ->
+    if evalBExp b m
+    then Later (evalCom c1 m >>= evalCom (CWhile b c1))
+    else pure m
